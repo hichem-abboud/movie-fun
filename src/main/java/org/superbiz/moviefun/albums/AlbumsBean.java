@@ -22,20 +22,21 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.persistence.criteria.CriteriaQuery;
+import java.util.ArrayList;
 import java.util.List;
 
 @Repository
 public class AlbumsBean {
 
-    @PersistenceContext
+    @PersistenceContext(name = "albums-name")
     private EntityManager entityManager;
 
-    @Transactional
     public void addAlbum(Album album) {
         entityManager.persist(album);
     }
 
     public List<Album> getAlbums() {
+        //return new ArrayList<Album>();
         CriteriaQuery<Album> cq = entityManager.getCriteriaBuilder().createQuery(Album.class);
         cq.select(cq.from(Album.class));
         return entityManager.createQuery(cq).getResultList();
