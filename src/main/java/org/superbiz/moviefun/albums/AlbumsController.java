@@ -1,20 +1,26 @@
 package org.superbiz.moviefun.albums;
 
 import org.apache.tika.Tika;
+import org.apache.tika.io.IOUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.superbiz.moviefun.S3Store;
+import org.superbiz.moviefun.blobstore.Blob;
+import org.superbiz.moviefun.blobstore.BlobStore;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.URISyntaxException;
+import java.net.URLConnection;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
+import java.util.Optional;
 
 import static java.lang.ClassLoader.getSystemResource;
 import static java.lang.String.format;
@@ -26,7 +32,12 @@ public class AlbumsController {
 
     private final AlbumsBean albumsBean;
 
+    @Autowired
+    @Qualifier("store")
+    private BlobStore fileStore;
+
     public AlbumsController(AlbumsBean albumsBean) {
+
         this.albumsBean = albumsBean;
     }
 
@@ -52,22 +63,39 @@ public class AlbumsController {
 
     @GetMapping("/{albumId}/cover")
     public HttpEntity<byte[]> getCover(@PathVariable long albumId) throws IOException, URISyntaxException {
+        Optional<Blob> blobOptional = this.fileStore.get(""+albumId);
+        Blob blob =  blobOptional.get();
+        byte[] bytes = IOUtils.toByteArray(blob.inputStream);
         Path coverFilePath = getExistingCoverPath(albumId);
-        byte[] imageBytes = readAllBytes(coverFilePath);
-        HttpHeaders headers = createImageHttpHeaders(coverFilePath, imageBytes);
+        HttpHeaders headers = createImageHttpHeaders(coverFilePath, bytes);
 
-        return new HttpEntity<>(imageBytes, headers);
+        return new HttpEntity<>(bytes, headers);
     }
 
 
     private void saveUploadToFile(@RequestParam("file") MultipartFile uploadedFile, File targetFile) throws IOException {
-        targetFile.delete();
+
+
+        //String name = uploadedFile.getOriginalFilename();
+        //int dot = name.lastIndexOf(".");
+        /*String extension = (dot == -1) ? "" : name.substring(dot + 1);
+        name = targetFile.getName() + "." + extension;*/
+        String name = targetFile.getName();
+        URLConnection connection = targetFile.toURL().openConnection();
+        String mimeType = uploadedFile.getContentType();
+        InputStream stream = uploadedFile.getInputStream();
+        //InputStream initialStream = new ByteArrayInputStream(uploadedFile.getBytes());
+        Blob blob = new Blob(name, stream, mimeType);
+        this.fileStore.put(blob);
+
+        /*targetFile.delete();
         targetFile.getParentFile().mkdirs();
         targetFile.createNewFile();
 
         try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
             outputStream.write(uploadedFile.getBytes());
-        }
+        }*/
+
     }
 
     private HttpHeaders createImageHttpHeaders(Path coverFilePath, byte[] imageBytes) throws IOException {
